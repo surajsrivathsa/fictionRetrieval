@@ -15,6 +15,10 @@ public class StanfordPipeline {
 	/**
 	 * @return
 	 */
+	
+	/*
+	 * @suraj: Configure a blank stanford pipeline either to do lemmatization or POS tagging + sentiment extraction
+	 */
 	public static StanfordCoreNLP getPipeline(String annotations) {
 		if (pipeline != null)
 			return pipeline;
@@ -26,6 +30,8 @@ public class StanfordPipeline {
 			properties.put(FRConstants.STNFRD_ANNOTATOR, annotations);
 		properties.put("ner.useSUTime", "false ");
 		properties.put("ner.applyNumericClassifiers", "false");
+		
+		// @suraj: neural network dependency parser https://nlp.stanford.edu/software/nndep.html
 		if(annotations!=null && annotations.contains("parse")){
 			properties.put("depparse.model", "edu/stanford/nlp/models/parser/nndep/english_SD.gz");
 			//properties.put("parse.maxlen", "30");

@@ -30,6 +30,12 @@ public class FeatureExtractorUtility {
 	 * @param chunks
 	 * @return The method calculates average TTR over equal sized tokens
 	 */
+	
+	/*
+	 * @suraj: Input list of chunks, find out count of distinct words and total words without stop words/punctuation
+	 * Take the ratio and keep on adding it to a variable
+	 * Finally divide by total number of chunks to normalize
+	 */
 	public BigDecimal getAverageTTR(List<Chunk> chunks) {
 
 		int chunkNo = chunks.size();
@@ -43,7 +49,11 @@ public class FeatureExtractorUtility {
 		return new BigDecimal((ratio * 100) / chunkNo).setScale(3, RoundingMode.CEILING);
 	}
 
-	private long getDistinctWordCount(List<String> tokens) {
+	/*
+	 * @suraj: Given list of token find the  unique token word count
+	 */
+	
+private long getDistinctWordCount(List<String> tokens) {
 		return tokens.parallelStream().distinct().count();
 
 	}
@@ -71,6 +81,7 @@ public class FeatureExtractorUtility {
 	 * @param properWordCount
 	 * @return The method generates the features for a chunk
 	 */
+	
 	public Feature generateFeature(Integer chunkNo, Integer paragraphCount, Integer sentenceCount, List<Word> raw,
 			List<Word> stpwrdRmvd, List<String> stpwrdPuncRmvd, double malePrpPosPronounCount,
 			double femalePrpPosPronounCount, double personalPronounCount, double possPronounCount,
@@ -84,10 +95,17 @@ public class FeatureExtractorUtility {
 		int totalCount = raw.size();
 		double totalSenti = 0d;
 		totalSenti = senti_negetiv + senti_positiv + senti_neutral;
-
+		
+		/* @suraj: calculate flesch score per chunk
+		 * Number of paragraphs / total words in chunk
+		 * Most of the features are normalized by total number of words in the chunk
+		 */
+		
 		double fleschReadingScore = 206.835 - (1.015 * ((double) properWordCount / (double) sentenceCount))
 				- 84.6 * ((double) numOfSyllables / (double) properWordCount); // as per wiki
 		fleschReadingScore = fleschReadingScore / 100; // normalise over 100
+		
+		// @suraj : Number of paragraphs / total words in chunk
 		if (paragraphCount != null)
 			feature.setParagraphCount(new Double(paragraphCount) / new Double(totalCount));
 
@@ -132,6 +150,13 @@ public class FeatureExtractorUtility {
 	 *             top 20 results, per chunk Step 5: So, if query book has 12 chunks
 	 *             we have 12 results list (in a class)
 	 */
+	
+	/*
+	 * @suraj: Given list of books, Create a hash map of {bookid - chunkid : feature vectors}
+	 * We are not writing to csv in this function, don't get confused
+	 * Looks like we are also not comparing query book in below funbctions, we are just normalizing feature vectors and storing in file
+	 */
+	
 	public static void writeFeaturesToCsv(List<BookDetails> books) throws IOException {
 
 		Map<String, double[]> corpus = new HashMap<>(); // this corpus is (N*M) space, (each
@@ -198,8 +223,14 @@ public class FeatureExtractorUtility {
 
 	}
 
+	/*
+	 * @suraj: Now we have a map of {bookid-chunk : feature vector} as input
+	 * we need to normalize the feature vectors using whole corpus
+	 */
+	
 	private static Map<String, double[]> write(Map<String, double[]> corpus, double max_avg_senten_len,
 			double max_NUM_of_CHARS, double max_TTR) throws IOException {
+		
 		Map<String, double[]> corpus_normalized = new HashMap<>();
 		double dummy = 10000.0000;
 		String FEATURE_CSV_FILE = FRGeneralUtils.getPropertyVal("file.feature");
@@ -208,7 +239,17 @@ public class FeatureExtractorUtility {
 
 			fileWriter.append(FRConstants.FILE_HEADER.toString());
 			fileWriter.append(FRConstants.NEW_LINE);
-
+			
+			/*
+			 * @suraj: for each key-value mapping pair in the map
+			 * Most of the features are normalized by their respective max values present through out corpus
+			 * for example: sentence lenght by max sentence length
+			 * Once normalized add a comma
+			 *  except for last feature(ttr) --> since ttr would be last column you need to add a new line
+			 * 0.5 + , + 0.6 + , + 0.7 + /n
+			 * 
+			 */
+			
 			for (Map.Entry<String, double[]> chunk_features : corpus.entrySet()) {
 				fileWriter.append(String.valueOf(chunk_features.getKey()) + FRConstants.COMMA);// 'pg547-1'
 																								// -
@@ -257,6 +298,10 @@ public class FeatureExtractorUtility {
 
 	}
 
+	/*
+	 *  @suraj: convert csv file to attribute-relation file for better standard
+	 */
+	
 	public static void writeCSVtoARFF(String source_CSV_FILE, String target_ARFF_FILE) throws IOException {
 		// load CSV
 		CSVLoader loader = new CSVLoader();
@@ -275,6 +320,11 @@ public class FeatureExtractorUtility {
 	 * @param charMap
 	 * @return
 	 */
+	
+	/*
+	 * @suraj: I did not understand this function and input data completely, need to revisit
+	 */
+	
 	public Map<String, Integer> getUniqueCharacterMap(Map<String, Integer> charMap) {
 
 		List<String> all_names = new ArrayList<String>(charMap.keySet());
@@ -329,7 +379,8 @@ public class FeatureExtractorUtility {
 						if (outerName.length >= 2 && innerName.length == 1 && FNAME_OUTER.contains(FNAME_INNER)) {
 							charMapClone.remove(inputMap.getKey());
 						}
-					} else { // we deal with "." dots here below
+					} 
+					else { // we deal with "." dots here below
 						/*
 						 * case 4: { J. Doe, John Doe, Johny Doe} | o/p = Johny Doe combine these dot
 						 * names, if both of the first name starts with same alphabet and last name is

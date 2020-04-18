@@ -13,6 +13,7 @@ public class ParagraphPredicate implements Predicate<Word> {
 
 	/* 
 	 * The method tests whether the sentence contains html tags
+	 * <p> or <s> tags
 	 */
 	public boolean test(Word word) {
 		if (word.getLemma().equals(FRConstants.P_TAG) || word.getLemma().equals(FRConstants.S_TAG)) {

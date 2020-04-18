@@ -22,6 +22,10 @@ public class FRWebUtils {
 	private static final String FEMALE_ORIENTED = "female oriented";
 	private static final String WRITING_STYLE = "writing style";
 
+	/*
+	 * @suraj: read genre file, omit header while reading and write the map as {rownumber: genre}
+	 */
+	
 	public Map<Integer, String> getAllMasterGenres() throws IOException {
 
 		String line = "";
@@ -42,6 +46,13 @@ public class FRWebUtils {
 		return genres;
 	}
 
+	/*
+	 * @suraj: extract bookid, author name from book list csv file
+	 * file may contain multiple columns separated by semicolon 
+	 * col1;pg1234.epub;col3;col4:jane austen
+	 * extract bookid = 1234 from col2 and jane austen from last column
+	 */
+	
 	public Map<String, String> getAllMasterBooks() throws IOException {
 
 		String BookmasterCSVFile = FRGeneralUtils.getPropertyVal("book.list.csv.loc");
@@ -66,6 +77,10 @@ public class FRWebUtils {
 		return book_map;
 	}
 
+	/*
+	 * @suraj: return book name if book id is given
+	 */
+	
 	public String getMasterBookName(Map<String, String> book_master, String bookId) {
 		String bookName = "";
 		for (Map.Entry<String, String> res : book_master.entrySet()) {
@@ -77,6 +92,10 @@ public class FRWebUtils {
 		return bookName;
 	}
 
+	/*
+	 * @suraj: return bookid if bookname is provided
+	 */
+	
 	public String getMasterBookId(Map<String, String> book_master, String bookName) {
 		String book_Id = "";
 		for (Map.Entry<String, String> res : book_master.entrySet()) {
@@ -88,6 +107,14 @@ public class FRWebUtils {
 		return book_Id;
 	}
 
+	/*
+	 * @suraj: given a map of reduced features (f0, f1, f2 ...), we need to lookup
+	 * for these feature column names and get their string representation ike f14 = writing style
+	 * If provided map contains both male and female orientation then remove them and add plot complexity.
+	 * Possible bug: Why is it showing both orientation?
+	 * Finally append all values as a string and remove the last comma
+	 */
+	
 	public static String getHighLevelFeatures(Map<String, String> reduced_features) {
 		Set<String> ftrSet = new HashSet<>();
 		if (reduced_features.size() > 0) {
@@ -99,6 +126,8 @@ public class FRWebUtils {
 			}
 		}
 		System.out.println(ftrSet.size());
+		
+		// @suraj: If the set contains both male oriented and female oriented then do not send it further, delete it and add plot complexity
 		if(ftrSet.contains(MALE_ORIENTED) && ftrSet.contains(FEMALE_ORIENTED)) {
 			ftrSet.remove(MALE_ORIENTED);
 			ftrSet.remove(FEMALE_ORIENTED);
@@ -108,11 +137,18 @@ public class FRWebUtils {
 		for (String s : ftrSet) {
 			reducedFe.append(s).append(" ,");
 		}
+		
+		// @suraj: remove the last comma appended: f1,f2,f3, => f1,f2,f3
+		
 		reducedFe.deleteCharAt(reducedFe.length() - 1);
 		return reducedFe.toString();
 
 	}
 
+	/*
+	 * @suraj: simple getter method that maps feature column to feature columns name
+	 * f0 -> paragraph count
+	 */
 	private static String getFeatureHighLevelName(String featureId) {
 		StringBuffer featureName = new StringBuffer();
 		System.out.println("1");
@@ -170,6 +206,7 @@ public class FRWebUtils {
 		return featureName.toString();
 	}
 
+	
 	public static String getFeatureName(String featureId) {
 		String featureName = "";
 		if (featureId.equals("F0")) // writing style
@@ -220,6 +257,10 @@ public class FRWebUtils {
 		return featureName;
 	}
 
+	/*
+	 * @suraj: read a book, given a folder file path 
+	 */
+	
 	public static String readBookContent(String path) {
 		File file = new File(path);
 		try {

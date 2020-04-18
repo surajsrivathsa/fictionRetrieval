@@ -22,6 +22,10 @@ public class FRSimilarityUtils {
 
 	final static Logger LOG = Logger.getLogger(FRSimilarityUtils.class);
 	
+	/*
+	 * @suraj: did not see this function getting called anywhere
+	 */
+	
 	public Map<String, Similarity> getNaiveSimilarityBtwnQueryAndCorpus(Map<String, double[]> corpus, String queryBookId) {
 		Map<String, Similarity> result_Map = new HashMap<>(); // key=cosineSimVal, value=BookId
 
@@ -92,12 +96,13 @@ public class FRSimilarityUtils {
 	 * @return Map of results
 	 * @throws IOException
 	 * @author Sayantan
-	 * @category - Input: Corpus plus the chunks of a corpus
+	 * @category - Input: Corpus plus the chunks of a corpus along with associated feature vectors
 	 */
 
 	public Map<Double, String> getSingleNaiveSimilarity(Map<String, Map<String, double[]>> books, String qryBookId,
 			Entry<String, double[]> query, String simType, int topKRes, int LEAVE_LAST_K_ELEMENTS_OF_FEATURE) throws IOException {
 
+		// @suraj : why 3?
 		int topkRequested = topKRes*3;//FRConstants.TOP_K_RESULTS * 3;
 
 		if (books == null || qryBookId == null || query == null || simType == null)
@@ -114,6 +119,7 @@ public class FRSimilarityUtils {
 		double norm_qry = 0.0;
 
 		// find normalised qry vector value ONLY once
+		// sqrt (x2 + y2 + z2)
 		double[] queryFeature = query.getValue();
 		for (int j = 0; j < queryFeature.length-LEAVE_LAST_K_ELEMENTS_OF_FEATURE; j++) { //this_loop_excludes_last_2_elements_of_feature_vector
 			norm_qry = norm_qry + (queryFeature[j] * queryFeature[j]);
@@ -125,12 +131,23 @@ public class FRSimilarityUtils {
 		for (Entry<String, Map<String, double[]>> book : books.entrySet()) {
 
 			for (Entry<String, double[]> chunk : book.getValue().entrySet()) {
+				
 				// check all vectors, exceptQuery itself! which is also present!
-				if (!(qryBookId.equals(book.getKey()) && query.getKey().equals(chunk.getKey()))) {
+				/*
+				 * @suraj: its like comparing query book with query book
+				 * since book hashmap contains both corpus and query book
+				 */
+				
+				if (!(qryBookId.equals(book.getKey()) && query.getKey().equals(chunk.getKey()))) 
+				{
 					book_vector = chunk.getValue();
 					dist_meas_values = 0.0;
 					norm_book = 0.0;
-					for (int i = 0; i < queryFeature.length-LEAVE_LAST_K_ELEMENTS_OF_FEATURE; i++) {//this_loop_excludes_last_2_elements_of_feature_vector
+					for (int i = 0; i < queryFeature.length-LEAVE_LAST_K_ELEMENTS_OF_FEATURE; i++) 
+					{
+						//this_loop_excludes_last_2_elements_of_feature_vector, since this is a non-global search
+						
+						// @suraj : cosine similarity is just dot product
 						if (simType.equals(FRConstants.SIMILARITY_COSINE))
 							dist_meas_values = dist_meas_values + (queryFeature[i] * book_vector[i]);
 						else if (simType.equals(FRConstants.SIMILARITY_L1))
@@ -139,19 +156,22 @@ public class FRSimilarityUtils {
 							dist_meas_values = dist_meas_values + Math.pow(queryFeature[i] - book_vector[i], 2); // (x1-x2)^2
 
 						norm_book = norm_book + (book_vector[i] * book_vector[i]);
+						// @suraj: simialr to query normalization value, accumulate norm book normalization
 					}
 
 					// only if Dr>0 & Normalise ONLY for Cosine and L2, not L1!
+					// @suraj: if norm_book > 0 that means there was some similarity between query book and norm book, else there was no similarity, hence labeled as zero
 					if (norm_book > 0 && norm_qry > 0 && simType.equals(FRConstants.SIMILARITY_COSINE)) {
 						dist_meas_values = dist_meas_values / (Math.sqrt(norm_book) * norm_qry);
 					} else if (norm_book > 0 && norm_qry > 0 && simType.equals(FRConstants.SIMILARITY_L2)) {
 						dist_meas_values = Math.sqrt(dist_meas_values);
 						dist_meas_values = 1 / (1 + dist_meas_values);
 					} else if (norm_book > 0 && norm_qry > 0 && simType.equals(FRConstants.SIMILARITY_L1)) {
-						// no normalization
+						// no normalization for L1 similarity
 						dist_meas_values = 1 / (1 + dist_meas_values);
 					}
 
+					// @suraj: threshold the chunk similarity. if similarity of chunk > 0.7 then allow else filter out
 					dist_meas_values = Math.round(dist_meas_values * 10000.0000) / 10000.0000;
 					if (dist_meas_values > FRConstants.SIMILARITY_CUTOFF) {
 						multimap.put(dist_meas_values, book.getKey() + "-" + chunk.getKey());
@@ -198,6 +218,7 @@ public class FRSimilarityUtils {
 	 * @author Sayantan
 	 * @category - Difference with 'getSingleNaiveSimilarity' is that, here it just accepts corpus and a single qry string (*NOT* the chunks of a book)
 	 */
+	
 	public SortedMap<Double, String> getSingleNaiveSimilarityDummy(Map<String, double[]> corpus, String queryBookId, int topkRequested, String simType) throws IOException {
         // usually SortedMap - TreeMap would have sorted in low to high number value, but we use 'Collections.reverseOrder()'
 		SortedMap<Double, String> results = new TreeMap<Double, String>(Collections.reverseOrder());

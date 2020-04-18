@@ -63,6 +63,14 @@ public class ChunkDetailsGenerator {
 	 * @return
 	 * @throws IOException
 	 */
+	/*
+	 * @suraj : Input Folder path(not from function)
+	 * Output: List of Bookdetails objects
+	 * Inside the function, get book names and content from the folder path
+	 * for each book --> generate chunks and get the chunk details
+	 * Use the chunk details to find TTR and set num of chars
+	 */
+	
 	public List<BookDetails> getChunksFromAllFiles() throws IOException {
 		init();
 
@@ -72,6 +80,7 @@ public class ChunkDetailsGenerator {
 		// following loop runs, over path of each book
 		FRFileOperationUtils.getFileNames(CONTENT_EXTRCT_FOLDER).stream().forEach(file -> {
 			String fileName = file.getFileName().toString().replace(FRConstants.CONTENT_FILE, FRConstants.NONE);
+			//replave -content.html with empty string
 
 			try {
 				BookDetails book = new BookDetails();
@@ -86,6 +95,7 @@ public class ChunkDetailsGenerator {
 																	 // a feature
 																	 // object/vector
 				book.setAverageTTR(feu.getAverageTTR(getEqualChunksFromFile(getTokensFromAllChunks(book.getChunks()))));
+				//calculate average ttr and set the value for the book
 				book.setNumOfChars(NUM_OF_CHARS_PER_BOOK == 0 ? 1 : NUM_OF_CHARS_PER_BOOK);
 				books.add(book);
 
@@ -121,6 +131,9 @@ public class ChunkDetailsGenerator {
 		WordAttributeGenerator wag = new WordAttributeGenerator();
 		FeatureExtractorUtility feu = new FeatureExtractorUtility();
 		List<String> stopwords = Arrays.asList(FRGeneralUtils.getPropertyVal(FRConstants.STOPWORD_FICTION).split("\\|"));
+		
+		//@suraj: load stopwords list from config.properties file
+		
 		Concept cncpt = wag.generateWordAttributes(Paths.get(path)); 
 		
 		for (Entry<String,Integer> c : cncpt.getCharacterMap().entrySet()) {

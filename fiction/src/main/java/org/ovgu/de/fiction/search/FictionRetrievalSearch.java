@@ -22,10 +22,19 @@ import org.ovgu.de.fiction.utils.FRSimilarityUtils;
 
 public class FictionRetrievalSearch {
 	final static Logger LOG = Logger.getLogger(ChunkDetailsGenerator.class);
+	
+	/*
+	 * book: [querybook, book1, book2, book3] 
+	 * @suraj: input querybook number, feature file and other.
+	 * first extract book --> [chunk --> feature] array mapping
+	 * Next use a function on the interim result, pass query book number and above maps. get a sorted map of weights with book
+	 * output topk search results
+	 */
+	
 	public static TopKResults findRelevantBooks(String qryBookNum, String featureCsvFile, String PENALISE, String ROLLUP, 
 			String TTR_CHARS,int topKRes,String similarity) throws IOException {
 		Map<String, Map<String, double[]>> books = getChunkFeatureMapForAllBooks(featureCsvFile);
-
+		// @suraj: books - {book1 : {ch1 :[], ch2:[]}, book2: {ch1:[]}, querybook : {ch1: []}}
 		SortedMap<Double, String> results_topK = compareQueryBookWithCorpus(qryBookNum, books, PENALISE, ROLLUP, TTR_CHARS,topKRes,similarity);
 		
 		TopKResults topK = new TopKResults();
@@ -34,6 +43,11 @@ public class FictionRetrievalSearch {
 		return topK;
 	}
 
+	/*
+	 * @suraj: input feature csv file
+	 * output hashmap of maps containing chunk features per chunk per book
+	 */
+	
 	private static Map<String, Map<String, double[]>> getChunkFeatureMapForAllBooks(String featureCsvFile)
 			throws IOException, FileNotFoundException {
 		String line = "";
@@ -55,6 +69,10 @@ public class FictionRetrievalSearch {
 		return books;
 	}
 
+	/*
+	 * @suraj:  
+	 */
+	
 	private static SortedMap<Double, String> compareQueryBookWithCorpus(String qryBookId, Map<String, Map<String, double[]>> books, 
 			String PENALISE, String ROLLUP, String TTR_CHARS,int topKRes, String similarity)
 			throws IOException {
@@ -69,7 +87,13 @@ public class FictionRetrievalSearch {
 		 * chunk_results = Top 20 results Map with => Key = bookId_ChunkNUM , Value = Similarity
 		 * normalized
 		 */
+		
+		/*
+		 * @suraj; extract query book --> chunk --> feature array mapping from common book map
+		 * and iterate for each quey chunk
+		 */
 		Map<String, double[]> queryChunkMap = books.get(qryBookId);
+		// @suraj - {qrychk1 : [], qrychk2:[]}
 
 		for (Map.Entry<String, double[]> queryChunk : queryChunkMap.entrySet()) { // loop over
 																					 // corpus and
@@ -79,6 +103,7 @@ public class FictionRetrievalSearch {
 																					 // match the
 																					 // query book
             // Important: LEAVE_LAST_K_ELEMENTS_OF_FEATURE = from similarity computation
+			// @suraj: since last two are ttr and num of characters
 			Map<Double, String> chunkSimResults = simUtils.getSingleNaiveSimilarity(books, qryBookId, queryChunk, simType,topKRes, FRConstants.LEAVE_LAST_K_ELEMENTS_OF_FEATURE);
 			LOG.debug("for qry chunk = " + qryBookId + " - " + queryChunk.getKey() + " Similar Book chunks are");
 			LOG.debug(chunkSimResults);
@@ -88,6 +113,17 @@ public class FictionRetrievalSearch {
 																						// or
 			// 10 results per query chunk
 		}
+		
+		/*
+		 * @suraj: staging results now has querychunk to corpuschunk mapping in the form of below
+		 * { Querybookid-querychunkid : { similarity score : corpusbookid-corpuschunkid}}
+		 * 
+		 * {123-pg1: {{3: 456-cc1},{2: 456-cc2}, {1: 234-cc1},       123-pg2 :{{10: 456-cc5}, {4: 456-cc1}} 
+		 * {456-cc1:0 + 3 + 4, 456-cc2 : 2}
+		 * We have mapping of each query chunk with entire corpus, this result can further be narrowed to 10/20 using topKRes
+		 * Remeber toKRes only controls the number of corpus chunks that are mapped to each query chunk and 
+		 * it is not the final top k search result
+		 */
 
 		LOG.debug("stg results size =" + staging_results.size());// size = no of chunks of
 																			// query book
@@ -103,13 +139,25 @@ public class FictionRetrievalSearch {
 
 		// outer for loop: key = q1, Val = [Map of similar chunks], Key = q2, Val =[Map of similar
 		// chunks]
-		for (Map.Entry<String, Map<Double, String>> stg_results : staging_results.entrySet()) {
+		for (Map.Entry<String, Map<Double, String>> stg_results : staging_results.entrySet()) 
+		{
 			Map<Double, String> chunk_res = stg_results.getValue(); // this has relevance weights
 																	 // for a query chunk
-			// below for loop over a specific query chunk: q1
-			for (Map.Entry<Double, String> res : chunk_res.entrySet()) {
+			// below for loop over a specific query chunk: q1's associated simialrity and corpuschunks
+			for (Map.Entry<Double, String> res : chunk_res.entrySet()) 
+			{
 				// add relevant output in a final results map, Key ="Corpus_Chunk" = bookId_ChunkId,
 				// Value = Cumulative_Weights
+				
+				/*
+				 * @suraj: don't get confused with chunkres and chunkresults. chunkres is the input map having similarity score for corpus chunk
+				 * chunk results is used for output rollup
+				 * Rollup: extract corpuschunkid and add it as key to map chunkresults if it doesn't already exists in the map.
+				 * if already exists then just add similarity score to it
+				 * Again remeber there are twoways to calculate similarity from paper(by addition doble sigma and another by multiplication
+				 * we do likewise according to rollup flag
+				 */
+				
 				if (!chunk_results.containsKey(res.getValue())) // new chunk ('pg547-1') item, just add
 					chunk_results.put(res.getValue(), res.getKey());
 				else {
@@ -128,6 +176,14 @@ public class FictionRetrievalSearch {
 																 // topK=top20, when it will combine
 																 // result chunks
 
+		/*
+		 * @suraj: Use above results and rollup chunk simialrity to book level
+		 * extract bookid from bookid-chunkid key. For each bookid accumulate its respective chunk similarity
+		 * Check the penalty flag and penalize by sqrt(number of chunks in book) or number of chunks in book or nothing
+		 * 
+		 * possible bug: In one of the paper penalization is by N+M, here we are just penalizing by N 
+		 */
+		
 		Map<String, Double> book_results = new TreeMap<>(); // rolled up values per book!
 		// roll up from chunks to a corpus book level, i.e. 'pg547-1' , 'pg547-2' ... all clubbed to
 		// 'pg547'
@@ -166,22 +222,32 @@ public class FictionRetrievalSearch {
 			return sorted_results_wo_TTR;
 		
 		}
-		else{//i.e. include TTR and Num of characters
+		else
+		{//i.e. include TTR and Num of characters
 			//compose a feature array with 3 elements
 			//0. Similarity Relevance score - weight 0.85
 			//1. TTR - weight 0.10
 			//2. Numbr of Chars - weight 0.05
-			
+			// featureset 1-20 * 0.85 + 0.1 * ttr + 0.05 * numchars
 			//Compose a corpus of all books (not chunks) with above 3 dimensional vector
 			// find L2 similarity and rank results
 			
+			/*
+			 * @suraj: did not get the innermost loop global_feature[1] and [2] as they should be taken for each book instead of chunk
+			 * we are also not rolling up these two features from chunk to book level
+			 * In this case these array values would just have the last chunk values of ttr and numchars and not rolled up ones
+			 */
+			
 			Map<String, double[]> global_corpus = new TreeMap<>();
 			//create feature vectors below
-			for(Map.Entry<Double, String> global_books:sorted_results_wo_TTR.entrySet()){
+			for(Map.Entry<Double, String> global_books:sorted_results_wo_TTR.entrySet())
+			{
 				double [] global_feature = new double[FRConstants.FEATURE_NUMBER_GLOBAL];
 				global_feature[0] = global_books.getKey()*FRConstants.FEATURE_WEIGHT_MORE;
-				   for(Map.Entry<String, Map<String, double[]>> input_books: books.entrySet()){
-					   if(global_books.getValue().equals(input_books.getKey())){ // match bookId with bookId 
+				   for(Map.Entry<String, Map<String, double[]>> input_books: books.entrySet())
+				   {
+					   if(global_books.getValue().equals(input_books.getKey()))
+					   { // match bookId with bookId 
 						   Map<String, double[]> chunk_map = input_books.getValue();
 						     for(Map.Entry<String, double[]> temp_chunk: chunk_map.entrySet()){
 						    	 	 global_feature[1] = temp_chunk.getValue()[FRConstants.TTR_21]*FRConstants.FEATURE_WEIGHT_LESS;
@@ -202,7 +268,10 @@ public class FictionRetrievalSearch {
 			
 			global_corpus.put(qryBookId, global_qry_vector); // add the global_query to corpus
 			
-			
+			/*
+			 * topk results are retrieved for global search which includes ttr and #characters
+			 * simialrity weight = 20 dim feature vector * 0.85 + ttr * 0.1 + #characters * 0.05
+			 */
 			sorted_results_mit_TTR = simUtils.getSingleNaiveSimilarityDummy(global_corpus, qryBookId, FRConstants.TOP_K_RESULTS, FRConstants.SIMILARITY_L2);
 			
 			LOG.debug("For Global Feature based Similarity, QBE Book = " + qryBookId + " printing top " + FRConstants.TOP_K_RESULTS + " results");
@@ -210,15 +279,21 @@ public class FictionRetrievalSearch {
 			return sorted_results_mit_TTR;
 			
 		}
-		
-		
-		
-		
+				
 	}
+	
+	
+	/*
+	 * @suraj: Input a ascending order sorted map, first sort it in descending order
+	 * initialize the weight of 1st rank results as 1 and normalize other search results whose rank > 1
+	 * to have weight < 1 by dividing by topweight
+	 * for example: if rank 2 result have weight of 3 and top weight is 4 then normalized weight would be 3/4
+	 */
 	
 	private static SortedMap<Double, String> printTopKResults(SortedMap<Double, String> sorted_results){
 		int count = 0;
 		double topWeight = 0;
+		// 3,2,1 => 1,0.6, 0.3
 		SortedMap<Double, String> printed_results = new TreeMap<Double, String>(Collections.reverseOrder());
 			for (Map.Entry<Double, String> print_res : sorted_results.entrySet()) {
 				count++;
@@ -239,20 +314,30 @@ public class FictionRetrievalSearch {
 			return printed_results;
 	}
 
+	/* @suraj: letys say book has 4 chunks, during processing of first chunk, bookfeaturemap doesn't have the book name as it 
+	 * has seen the book for the first time, Now create a new hashmap and add chunk to feature mapping. On outer map add the new book
+	 * as key and map it to the new chunk map
+	 * if you are processing 2,3,4 chunks then that book would already exists in outer map, hence we need to retrieve the existing 
+	 * maps and add the chunk to feature mapping and book to chunk mapping to them.
+	 * 
+	 */
+	
 	private static Map<String, Map<String, double[]>> generateChunkFeatureMapForAChunk(String[] instances,
 			Map<String, Map<String, double[]>> bookFeatureMap) {
 		String bookName = instances[0].split("-")[0];
 		String chunkNo = instances[0].split("-")[1];
 		double[] feature_array = new double[FRConstants.FEATURE_NUMBER];
 
+		// @suraj - because feature vector starts from position 1 and index 0 has book-chunk number
 		for (int j = 1; j < instances.length; j++) {// start from index 1, skip chunk
 													// num
 			feature_array[j - 1] = Double.parseDouble(instances[j]);
-		}
-
+		}	
+		
 		Map<String, double[]> chunkFeatureMap = bookFeatureMap.containsKey(bookName) ? bookFeatureMap.get(bookName) : new HashMap<>();
 		chunkFeatureMap.put(chunkNo, feature_array);
 		bookFeatureMap.put(bookName, chunkFeatureMap);
 		return bookFeatureMap;
 	}
+	
 }
